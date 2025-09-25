@@ -214,7 +214,6 @@ function contactoTexto() {
 /* =========================
    INTENTS / RUTEO BÁSICO
    ========================= */
-
 function resolverIntent(body) {
   const n = normalize(body);
 
@@ -223,8 +222,8 @@ function resolverIntent(body) {
     const opt = Number(n);
     if (opt === 1) return { type: 'proximo' };
     if (opt === 2) return { type: 'listar' };
-    if (opt === 3) return { type: 'precios' }; // requiere curso; si no, invitamos a especificar
-    if (opt === 4) return { type: 'temarios' }; // idem
+    if (opt === 3) return { type: 'precios' };
+    if (opt === 4) return { type: 'temarios' };
     if (opt === 5) return { type: 'contacto' };
   }
 
@@ -239,51 +238,55 @@ function resolverIntent(body) {
     return { type: 'proximo' };
   }
 
-  // Preguntas específicas de curso
+  // --- Detectores de detalle (precio/temario/duracion) + curso ---
+  const tokens = n.split(' ');
+  const pidePrecio   = tokens.includes('precio') || tokens.includes('precios') || tokens.includes('costo') || tokens.includes('tarifa');
+  const pideTemario  = tokens.includes('temario') || tokens.includes('temarios') || tokens.includes('contenido');
+  const pideDuracion = tokens.includes('duracion') || tokens.includes('dura');
+
+  // Buscamos curso
   const match = encontrarCurso(n);
+
+  // Si pidieron detalle y hay curso, devolvemos el detalle
+  if ((pidePrecio || pideTemario || pideDuracion) && match) {
+    return {
+      type: 'detalle',
+      detalle: pidePrecio ? 'precio' : (pideTemario ? 'temario' : 'duracion'),
+      curso: match.data
+    };
+  }
+
+  // Si pidieron detalle pero NO especificaron curso
+  if (pidePrecio || pideTemario || pideDuracion) {
+    return { type: 'falta_curso' };
+  }
+
+  // Si mencionó un curso (pero sin pedir detalle), damos ficha base
   if (match) {
-    if (match.tipo === 'proximo') {
-      // Si mencionan whatsapp/chatbot, damos el próximo en vivo
-      return { type: 'proximo' };
-    }
-    // Si mencionan un curso del catálogo, devolvemos info base
+    if (match.tipo === 'proximo') return { type: 'proximo' };
     return { type: 'curso', curso: match.data };
   }
 
-  // Extractores simples (precio/temario/duracion + curso)
-  // Ej: "precio photoshop", "temario sql", "duracion python"
-  const tokens = n.split(' ');
-  const pidePrecio = tokens.includes('precio') || tokens.includes('precios') || tokens.includes('costo') || tokens.includes('tarifa');
-  const pideTemario = tokens.includes('temario') || tokens.includes('temarios') || tokens.includes('contenido');
-  const pideDuracion = tokens.includes('duracion') || tokens.includes('dura');
-
-  if (pidePrecio || pideTemario || pideDuracion) {
-    const m = encontrarCurso(n);
-    if (!m) return { type: 'falta_curso' };
-    return { type: 'detalle', detalle: pidePrecio ? 'precio' : (pideTemario ? 'temario' : 'duracion'), curso: m.data };
-  }
-
-  // Pregunta por precios/temarios sin especificar
-  if (incluyeAlguna(n, ['precios', 'precio', 'costo', 'tarifas'])) {
+  // Preguntas genéricas
+  if (incluyeAlguna(n, ['precios', 'costo', 'tarifas'])) {
     return { type: 'falta_curso' };
   }
   if (incluyeAlguna(n, ['temario', 'temarios', 'contenido'])) {
     return { type: 'falta_curso' };
   }
-
-  // Listar cursos si preguntan por "cursos"
   if (incluyeAlguna(n, ['cursos', 'catalogo', 'lista'])) {
     return { type: 'listar' };
   }
 
-  // Si preguntan por algo que no existe: “de momento no hay”
+  // Si preguntan por algo que no existe
   if (incluyeAlguna(n, ['curso de ', 'tienen ', 'hay '])) {
     return { type: 'no_disponible' };
   }
 
-  // Fallback: mostrar menú
+  // Fallback
   return { type: 'fallback' };
 }
+
 
 /* =========================
    RUTAS
@@ -368,4 +371,5 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`✅ ${BUSINESS.marca} bot escuchando en puerto ${port}`);
 });
+
 
